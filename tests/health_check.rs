@@ -1,8 +1,17 @@
+use once_cell::sync::Lazy;
 use sqlx::{Executor, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 use z2p::configuration::{get_configuration, DatabaseSettings};
 use z2p::startup::run;
+use z2p::telemetry::{get_subscriber, init_subscriber};
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    if std::env::var("TEST_LOG").is_ok() {
+        let tracing_subscriber = get_subscriber("test".into(), "info".into());
+        init_subscriber(tracing_subscriber);
+    }
+});
 
 pub struct TestApp {
     pub address: String,
@@ -85,6 +94,8 @@ async fn subscribe_returns_400_when_data_is_missing() {
 }
 
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind to random port");
     // Retrieve the port
     let port = listener.local_addr().unwrap().port();
