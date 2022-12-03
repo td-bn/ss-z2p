@@ -1,5 +1,5 @@
-use sqlx::PgPool;
 use std::net::TcpListener;
+use sqlx::postgres::PgPoolOptions;
 use z2p::configuration::get_configuration;
 use z2p::startup::run;
 use z2p::telemetry::*;
@@ -10,10 +10,19 @@ async fn main() -> std::io::Result<()> {
     init_subscriber(tracing_subscriber);
 
     let configuration = get_configuration().expect("Failed to read configuration");
-    let connection = PgPool::connect(&configuration.database.connection_string())
+
+    let connection = PgPoolOptions::new()
+        .connect_timeout(std::time::Duration::from_secs(2))
+        .connect(&configuration.database.connection_string())
         .await
-        .expect("Failed to connect to Postgres");
-    let address = format!("127.0.0.1:{}", configuration.application_port);
+        .expect(
+            &*format!("Failed to connect to Postgres with connection string: {}",
+                      &configuration.database.connection_string().as_str()
+            ));
+    let address = format!(
+        "{}:{}",
+        configuration.application.host, configuration.application.port
+    );
     let listener = TcpListener::bind(address)?;
     run(listener, connection)?.await
 }
