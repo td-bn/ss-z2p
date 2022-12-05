@@ -1,5 +1,5 @@
-use std::net::TcpListener;
 use sqlx::postgres::PgPoolOptions;
+use std::net::TcpListener;
 use z2p::configuration::get_configuration;
 use z2p::startup::run;
 use z2p::telemetry::*;
@@ -15,10 +15,10 @@ async fn main() -> std::io::Result<()> {
         .connect_timeout(std::time::Duration::from_secs(2))
         .connect(&configuration.database.connection_string())
         .await
-        .expect(
-            &*format!("Failed to connect to Postgres with connection string: {}",
-                      &configuration.database.connection_string().as_str()
-            ));
+        .expect(&*format!(
+            "Failed to connect to Postgres with connection string: {}",
+            &configuration.database.connection_string().as_str()
+        ));
     let address = format!(
         "{}:{}",
         configuration.application.host, configuration.application.port
