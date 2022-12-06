@@ -93,6 +93,35 @@ async fn subscribe_returns_400_when_data_is_missing() {
     }
 }
 
+#[actix_rt::test]
+async fn subscribe_returns_400_when_data_is_empty() {
+    let address = spawn_app().await.address;
+    let client = reqwest::Client::new();
+
+    let test_cases = vec![
+        ("name=&email=tdbn@gmail.com", "empty name"),
+        ("name=tdbn&email=", "empty email"),
+        ("name=tdbn&email=not-an-email", "invalid email"),
+    ];
+
+    for (body, _description) in test_cases {
+        let response = client
+            .post(&format!("{}/subscriptions", &address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute subscription request");
+
+        assert_eq!(
+            400,
+            response.status().as_u16(),
+            "The API did not return a 200 with payload {}",
+            body
+        )
+    }
+}
+
 async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
