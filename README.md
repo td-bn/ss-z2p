@@ -6,6 +6,14 @@ framework that handles the various functionalities of a newsletter.
 Following along the Rust: Zero to Production book with some changes here
 and there. 
 
+## Testing
+
+Start a local instance of (migrated) DB using:
+```shell
+./scripts/init_db.sh
+```
+
+Then, simply run tests using `cargo test`
 
 ## How to run
 
@@ -34,7 +42,7 @@ DATABASE_URL=postgres://postgres:password@localhost:5432/newsletter sqlx migrate
 Make sure you use the correct database url based on your env variables.
 
 
-## To test
+## Interacting with app
 
 Run:
 ```shell
