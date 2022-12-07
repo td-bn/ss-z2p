@@ -3,3 +3,7 @@ application:
 
 database:
   host: "postgres"
+
+email_client:
+  base_url: "https://api.postmark.com"
+  sender_email: "tdbn@telwaindaand.com"

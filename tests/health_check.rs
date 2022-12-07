@@ -3,6 +3,7 @@ use sqlx::{Executor, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 use z2p::configuration::{get_configuration, DatabaseSettings};
+use z2p::email_client::EmailClient;
 use z2p::startup::run;
 use z2p::telemetry::{get_subscriber, init_subscriber};
 
@@ -136,7 +137,19 @@ async fn spawn_app() -> TestApp {
 
     let connection_pool = configure_database(&configuration.database).await;
 
-    let server = run(listener, connection_pool.clone()).expect("Failed to start server");
+    // Build email client
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address");
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+    );
+
+    let server =
+        run(listener, connection_pool.clone(), email_client).expect("Failed to start server");
     // Spawn a new task inside tokio runtime
     // tokio's runtime is spun up by actix_rt
     //
