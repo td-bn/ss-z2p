@@ -34,8 +34,7 @@ impl EmailClient {
             html_body: html_content,
             text_body: text_content,
         };
-        self
-            .http_client
+        self.http_client
             .post(&url)
             .header("X-Postmark-Server-Token", &self.authorization_token)
             .json(&request_body)
@@ -46,7 +45,7 @@ impl EmailClient {
 }
 
 #[derive(serde::Serialize)]
-#[serde(rename_all="PascalCase")]
+#[serde(rename_all = "PascalCase")]
 struct SendEmailRequest<'a> {
     from: &'a str,
     to: &'a str,
