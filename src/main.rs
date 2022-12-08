@@ -14,7 +14,7 @@ async fn main() -> std::io::Result<()> {
 
     // Build database connection pool
     let connection = PgPoolOptions::new()
-        .connect_timeout(std::time::Duration::from_secs(2))
+        .acquire_timeout(std::time::Duration::from_secs(2))
         .connect(&configuration.database.connection_string())
         .await
         .unwrap_or_else(|_| {

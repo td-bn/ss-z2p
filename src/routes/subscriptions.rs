@@ -2,7 +2,6 @@ use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
 use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -53,7 +52,7 @@ pub async fn insert_subscriber(
     INSERT INTO subscriptions (id, email, name, subscribed_at)
     VALUES ($1, $2, $3, $4)
             "#,
-        Uuid::new_v4(),
+        sqlx::types::uuid::Uuid::new_v4(),
         new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
         Utc::now()
