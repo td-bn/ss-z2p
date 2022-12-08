@@ -1,10 +1,8 @@
 use once_cell::sync::Lazy;
 use sqlx::{Executor, PgPool};
-use std::net::TcpListener;
 use uuid::Uuid;
 use z2p::configuration::{get_configuration, DatabaseSettings};
-use z2p::email_client::EmailClient;
-use z2p::startup::run;
+use z2p::startup::{get_connection_pool, Application};
 use z2p::telemetry::{get_subscriber, init_subscriber};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -19,61 +17,44 @@ pub struct TestApp {
     pub db_pool: PgPool,
 }
 
-#[actix_rt::test]
-async fn health_check_works() {
-    let test_app = spawn_app().await;
-
-    let address = test_app.address;
-
-    let client = reqwest::Client::new();
-
-    let response = client
-        .get(format!("{}/health_check", &address))
-        .send()
-        .await
-        .expect("Failed to execute request");
-    assert!(response.status().is_success());
-    assert_eq!(Some(0), response.content_length());
+impl TestApp {
+    pub async fn post_subscription(&self, body: String) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/subscriptions", &self.address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute subscription request")
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind to random port");
-    // Retrieve the port
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
-
     // Get config for app start
-    let mut configuration = get_configuration().expect("Failed to read configuration");
-    configuration.database.database_name = Uuid::new_v4().to_string();
+    let configuration = {
+        let mut c = get_configuration().expect("Failed to read configuration");
+        c.database.database_name = Uuid::new_v4().to_string();
+        c.application.port = 0;
+        c
+    };
 
-    let connection_pool = configure_database(&configuration.database).await;
+    configure_database(&configuration.database).await;
 
-    // Build email client
-    let sender_email = configuration
-        .email_client
-        .sender()
-        .expect("Invalid sender email address");
-    let timeout = configuration.email_client.timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        sender_email,
-        configuration.email_client.authorization_token,
-        timeout,
-    );
-
-    let server =
-        run(listener, connection_pool.clone(), email_client).expect("Failed to start server");
+    let application = Application::build(&configuration.clone())
+        .await
+        .expect("Failed to build application");
+    let address = format!("http://127.0.0.1:{}", application.port());
     // Spawn a new task inside tokio runtime
     // tokio's runtime is spun up by actix_rt
     //
     // Cleanup not required as all tokio tasks are dropped when tokio runtime is shut down
-    let _ = tokio::spawn(server);
+    let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
         address,
-        db_pool: connection_pool,
+        db_pool: get_connection_pool(&configuration.database),
     }
 }
 
