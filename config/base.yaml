@@ -13,4 +13,5 @@ email_client:
   base_url: localhost
   sender_email: "tdbn@gmail.com"
   authorization_token: "my_secret_token"
+  timeout: 10000
 
