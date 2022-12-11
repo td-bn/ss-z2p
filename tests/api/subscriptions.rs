@@ -7,6 +7,23 @@ async fn subscribe_returns_200_for_valid_data() {
     // Arrange
     let test_app = spawn_app().await;
 
+    let body = "name=bn&email=tdnb%40hello.com";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&test_app.email_server)
+        .await;
+    let response = test_app.post_subscription(body.to_string()).await;
+
+    // Assert
+    assert_eq!(200, response.status().as_u16());
+}
+
+#[actix_rt::test]
+async fn subscribe_persists_the_new_subscriber() {
+    // Arrange
+    let test_app = spawn_app().await;
+
     // DB
     let connection = test_app.db_pool.clone();
     let body = "name=bn&email=tdnb%40hello.com";
@@ -21,12 +38,13 @@ async fn subscribe_returns_200_for_valid_data() {
 
     // Assert
     assert_eq!(200, response.status().as_u16());
-    let saved = sqlx::query!("SELECT email, name FROM subscriptions")
+    let saved = sqlx::query!("SELECT email, name, status FROM subscriptions")
         .fetch_one(&connection)
         .await
         .expect("Failed to fetch saved subscription.");
     assert_eq!(saved.email, "tdnb@hello.com");
     assert_eq!(saved.name, "bn");
+    assert_eq!(saved.status, "pending_confirmation");
 }
 
 #[actix_rt::test]
