@@ -1,7 +1,11 @@
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
 use crate::email_client::EmailClient;
+use crate::startup::ApplicationBaseUrl;
 use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
+use sqlx::types::Uuid;
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
@@ -20,9 +24,17 @@ impl TryFrom<FormData> for NewSubscriber {
     }
 }
 
+fn generate_subscription_token() -> String {
+    let mut rng = thread_rng();
+    std::iter::repeat_with(|| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(25)
+        .collect()
+}
+
 #[tracing::instrument(
     name="Adding a new subscriber",
-    skip(form, pool),
+    skip(form, pool, base_url),
     fields(
         subscriber_email = %form.email,
         subscriber_name = %form.name
@@ -32,19 +44,34 @@ pub async fn subscribe(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
+    base_url: web::Data<ApplicationBaseUrl>,
 ) -> impl Responder {
     let new_subscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
         Err(_err) => return HttpResponse::BadRequest().finish(),
     };
 
-    if insert_subscriber(&pool, &new_subscriber).await.is_err() {
-        return HttpResponse::InternalServerError().finish();
-    }
+    let subscriber_id = match insert_subscriber(&pool, &new_subscriber).await {
+        Ok(subscriber_id) => subscriber_id,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
+    };
 
-    if send_confirmation_email(&email_client, new_subscriber)
+    let subscription_token = generate_subscription_token();
+
+    if store_token(&pool, subscriber_id, &subscription_token)
         .await
         .is_err()
+    {
+        return HttpResponse::InternalServerError().finish();
+    }
+    if send_confirmation_email(
+        &email_client,
+        new_subscriber,
+        &base_url.0,
+        &subscription_token,
+    )
+    .await
+    .is_err()
     {
         return HttpResponse::InternalServerError().finish();
     }
@@ -54,13 +81,18 @@ pub async fn subscribe(
 
 #[tracing::instrument(
     name = "Sending confirmation email to new subscriber",
-    skip(email_client, new_subscriber)
+    skip(email_client, new_subscriber, subscription_token)
 )]
 pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
+    base_url: &str,
+    subscription_token: &str,
 ) -> Result<(), reqwest::Error> {
-    let confirmation_link = "https://my-api.com/subscriptions/confirm";
+    let confirmation_link = format!(
+        "{}/subscriptions/confirm?subscription_token={}",
+        base_url, subscription_token
+    );
     email_client
         .send_mail(
             new_subscriber.email,
@@ -86,16 +118,42 @@ pub async fn send_confirmation_email(
 pub async fn insert_subscriber(
     pool: &PgPool,
     new_subscriber: &NewSubscriber,
-) -> Result<(), sqlx::Error> {
+) -> Result<Uuid, sqlx::Error> {
+    let subscriber_id = Uuid::new_v4();
     sqlx::query!(
         r#"
     INSERT INTO subscriptions (id, email, name, subscribed_at, status)
     VALUES ($1, $2, $3, $4, 'pending_confirmation')
             "#,
-        sqlx::types::uuid::Uuid::new_v4(),
+        subscriber_id,
         new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
         Utc::now()
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to execute query: {:?}", e);
+        e
+        // Using the `?` operator to return early
+        // if the function failed, returning a sqlx::Error
+    })?;
+    Ok(subscriber_id)
+}
+
+#[tracing::instrument(name = "Storing subscription token", skip(pool, subscriber_id, token))]
+pub async fn store_token(
+    pool: &PgPool,
+    subscriber_id: Uuid,
+    token: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+    INSERT INTO subscription_tokens(subscription_token, subscriber_id)
+    VALUES ($1, $2)
+            "#,
+        token,
+        subscriber_id,
     )
     .execute(pool)
     .await
