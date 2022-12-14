@@ -111,3 +111,23 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
 
     assert_eq!(confirmation_links.html, confirmation_links.plain_text);
 }
+
+#[actix_rt::test]
+async fn subscribe_fails_if_there_is_a_fatal_database_error() {
+    // Arrange
+    let app = spawn_app().await;
+
+    let body = "name=bn&email=tdnb%40hello.com";
+
+    // Sabotage! HAHAH Evil Laugh!
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token;")
+        .execute(&app.db_pool)
+        .await
+        .unwrap();
+
+    // Act
+    let response = app.post_subscription(body.into()).await;
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 500);
+}

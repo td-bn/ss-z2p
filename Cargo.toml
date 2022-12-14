@@ -28,6 +28,8 @@ unicode-segmentation = "1.10.0"
 validator = "0.16.0"
 reqwest = { version = "0.11.11", features = ["json"] }
 rand = { version = "0.8", features = ["std_rng"] }
+thiserror = "1.0.37"
+anyhow = "1.0.66"
 
 [dev-dependencies]
 actix-rt = "2.7.0"
