@@ -124,7 +124,7 @@ pub async fn send_confirmation_email(
     );
     email_client
         .send_mail(
-            new_subscriber.email,
+            &new_subscriber.email,
             "Welcome!",
             &format!(
                 "Welcome!<br />\
@@ -186,7 +186,7 @@ pub async fn store_token(
     Ok(())
 }
 
-fn error_chain_fmt(
+pub fn error_chain_fmt(
     e: &impl std::error::Error,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
