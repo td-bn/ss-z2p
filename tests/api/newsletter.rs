@@ -83,6 +83,32 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
     assert_eq!(response.status().as_u16(), 200);
 }
 
+#[actix_rt::test]
+async fn request_missing_authorization_is_rejected() {
+    let app = spawn_app().await;
+
+    let newsletter_request_body = serde_json::json!({
+       "title": "Newsletter #1",
+        "content": {
+            "text": "Sample newsletter",
+            "html": "<p>Sample newsletter</p>"
+        }
+    });
+
+    let response = reqwest::Client::new()
+        .post(&format!("{}/newsletters", &app.address))
+        .json(&newsletter_request_body)
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(response.status().as_u16(), 401);
+    assert_eq!(
+        r#"Basic realm="publish""#,
+        response.headers()["WWW-Authenticate"]
+    )
+}
+
 // Use app API to create unconfirmed subscriber
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
     let body = "name=bn&email=tdnb%40hello.com";
