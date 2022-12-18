@@ -1,6 +1,7 @@
 use crate::domain::SubscriberEmail;
 use crate::email_client::EmailClient;
 use crate::routes::error_chain_fmt;
+use crate::telemetry::spawn_blocking_with_tracing;
 use actix_http::header::HeaderMap;
 use actix_http::{header, StatusCode};
 use actix_web::http::header::HeaderValue;
@@ -171,7 +172,7 @@ async fn validate_credentials(
         .map_err(PublishError::UnexpectedError)?
         .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username.")))?;
 
-    actix_web::rt::task::spawn_blocking(move || {
+    spawn_blocking_with_tracing(move || {
         verify_password_hash(expected_password_hash, credentials.password)
     })
     .await
@@ -203,14 +204,18 @@ async fn get_stored_credentials(
 }
 
 #[tracing::instrument(
-name = "Verify password hash", skip(expected_password_hash, password_candidate)
+    name = "Verify password hash",
+    skip(expected_password_hash, password_candidate)
 )]
 fn verify_password_hash(
     expected_password_hash: String,
     password_candidate: String,
 ) -> Result<(), PublishError> {
-    let expected_password_hash = PasswordHash::new(&expected_password_hash) .context("Failed to parse hash in PHC string format.") .map_err(PublishError::UnexpectedError)?;
+    let expected_password_hash = PasswordHash::new(&expected_password_hash)
+        .context("Failed to parse hash in PHC string format.")
+        .map_err(PublishError::UnexpectedError)?;
     Argon2::default()
-        .verify_password(password_candidate.as_bytes(), &expected_password_hash) .context("Invalid password.")
+        .verify_password(password_candidate.as_bytes(), &expected_password_hash)
+        .context("Invalid password.")
         .map_err(PublishError::AuthError)
 }

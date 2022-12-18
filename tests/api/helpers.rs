@@ -1,5 +1,5 @@
-use argon2::{Argon2, PasswordHasher};
 use argon2::password_hash::SaltString;
+use argon2::{Argon2, PasswordHasher};
 use once_cell::sync::Lazy;
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool};
