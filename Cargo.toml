@@ -31,6 +31,7 @@ rand = { version = "0.8", features = ["std_rng"] }
 thiserror = "1.0.37"
 anyhow = "1.0.66"
 base64 = "0.13"
+argon2 = { version = "0.3", features = ["std"] }
 
 [dev-dependencies]
 actix-rt = "2.7.0"
